@@ -8,7 +8,6 @@ from pyannote.audio import Pipeline
 from pyannote.audio.pipelines.utils.hook import ProgressHook
 from pyannote.database.util import load_rttm
 from pyannote.core import Annotation, Segment, notebook
-import asyncio
 import time
 import json
 import torch
@@ -24,8 +23,6 @@ def create_audio_stream(audio):
     return io.BytesIO(audio.export(format="wav").read())
 
 def add_query_parameter(link, params):
-    
-
     url_parts = list(urlparse.urlparse(link))
     query = dict(urlparse.parse_qsl(url_parts[4]))
     query.update(params)
@@ -69,7 +66,19 @@ def load_audio(uploaded_audio):
 openai.api_key = st.secrets['openai'] 
 hf_api_key = st.secrets['hf']
 
-st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper ASR")
+st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper")
+with st.expander('About'):
+    st.markdown('''
+        Given an audio file this app will
+          - [x] 1. Identify and diarize the speakers using [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
+          - [x] 2. Transcribe the video and attribute to speakers using [OpenAi Whisper API](https://platform.openai.com/docs/guides/speech-to-text/quickstart)
+          - [ ] 3. Set up an LLM chat with the transcript loaded into its knowledge database, so that a user can "talk" to the transcript of the audio file (WIP)
+
+        This version will only process up to first 6 minutes of an audio file due to limited resources of Streamlit.io apps.
+        A local version with access to a GPU can process 1 hour of audio in 1 to 5 minutes.
+        If you would like to use this app at scale reach out directly!
+    ''')
+
 
 option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"])
 st.write('Rule of thumb, it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.')

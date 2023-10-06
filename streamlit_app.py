@@ -11,13 +11,14 @@ from pyannote.core import Annotation, Segment, notebook
 import asyncio
 import time
 import json
+import torch
 
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 def create_audio_stream(audio):
-    return io.BytesIO(audio.export(format="mp3").read())
+    return io.BytesIO(audio.export(format="mp4").read())
 
 def add_query_parameter(link, params):
     import urllib.parse as urlparse
@@ -31,6 +32,10 @@ def add_query_parameter(link, params):
 
     return urlparse.urlunparse(url_parts)
 
+@st.cache_resource
+def load_rttm_file(rttm_path):
+    return load_rttm(rttm_path)['stream']
+
 
 # Set your OpenAI API, Hugging Face keys
 openai.api_key = st.secrets['openai'] 
@@ -38,7 +43,9 @@ hf_api_key = st.secrets['hf']
 
 st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper ASR")
 
-option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link"])
+
+
+option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"])
 
 # Upload audio file
 if option == "Upload an audio file":
@@ -72,32 +79,42 @@ elif option == "Use YouTube link":
         audio_file = audio_stream.download(filename='sample.mp4')
         time.sleep(2)
         audio = AudioSegment.from_file('sample.mp4')
-        st.audio(create_audio_stream(audio), format="audio/mp3", start_time=0)
+        st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
         # sample_rate = st.number_input("Enter the sample rate of the audio", min_value=8000, max_value=48000)
         # audio = audio.set_frame_rate(sample_rate)
         # except Exception as e:
         #     st.write(f"Error: {str(e)}")
-                                    
-
+elif option == 'See Example':
+    youtube_link = 'https://youtu.be/q466E9boFOY?si=A6-yt3CY_aUbYy6W'
+    audio_name = 'Paul George Steve Balmer Podcast'
+    st.write(f'Loading 1.5 hour audio file from {youtube_link}')
+    audio = AudioSegment.from_file('example/paul-george-steve-balmer.mp4')
+    rttm = "example/paul-geogre-steve-balmer-diarized.rttm"
+    transcript_file = 'example/paul-george-steve-balmer-transcript.json'
     
+                                    
 
 # Diarize
 if "audio" in locals():
     st.write('Performing Diarization...')
     # create stream
     duration = audio.duration_seconds
-    audio_ = create_audio_stream(audio)
+    
     
     # Perform diarization with PyAnnote
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.0",
         use_auth_token=hf_api_key)
+    if torch.cuda.device_count() > 0: # use gpu if available
+        pipeline.to(torch.device('cuda'))
 
     # run the pipeline on an audio file
     if rttm != None:
-        diarization = load_rttm(rttm)['stream']
+        st.write(f'Loading {rttm}')
+        diarization = load_rttm_file(rttm)
     else:
         with ProgressHook() as hook:
+            audio_ = create_audio_stream(audio)
             diarization = pipeline(audio_, hook=hook)
             # dump the diarization output to disk using RTTM format
             with open(f'{audio_name.split(".")[0]}.rttm', "w") as f:
@@ -108,12 +125,21 @@ if "audio" in locals():
     
     annotation = Annotation()
     sp_chunks = []
+    progress_text = f"Processing 1/{len(sp_chunks)}..."
+    my_bar = st.progress(0, text=progress_text)
+    counter = 0
+    n_tracks = len([a for a in diarization.itertracks(yield_label=True)])
     for turn, _, speaker in diarization.itertracks(yield_label=True):
         annotation[turn] = speaker
-        sp_chunks.append({'speaker': speaker,
-                          'start': turn.start, 'end': turn.end, 'duration': turn.end-turn.start,
-                          'audio': audio[turn.start*1000:turn.end*1000],
-                          'audio_stream': create_audio_stream(audio[turn.start*1000:turn.end*1000])})
+        progress_text = f"Processing {counter}/{len(sp_chunks)}..."
+        my_bar.progress((counter+1)/n_tracks, text=progress_text)
+        counter +=1
+        temp = {'speaker': speaker,
+                'start': turn.start, 'end': turn.end, 'duration': turn.end-turn.start,
+                'audio': audio[turn.start*1000:turn.end*1000]}
+        if transcript_file == None:
+            temp['audio_stream'] = create_audio_stream(audio[turn.start*1000:turn.end*1000])
+        sp_chunks.append(temp)
 
     # plot
     notebook.crop = Segment(-1, duration + 1)
@@ -132,7 +158,7 @@ if "audio" in locals():
         if youtube_link != None:
             speaker_summary += f" {add_query_parameter(youtube_link, {'t':str(int(temp['start']))})}"
         st.write(speaker_summary)
-        st.audio(temp['audio_stream'])
+        st.audio(create_audio_stream(temp['audio']))
 
 
     # st.write("Transcription with Whisper ASR:")
@@ -145,32 +171,49 @@ if "audio" in locals():
     progress_text = f"Processing 1/{len(sp_chunks)}..."
     my_bar = st.progress(0, text=progress_text)
     
-    sp_chunks_updated = []
-    for i,s in enumerate(sp_chunks):
-        if s['duration'] > 0.1:
-            audio_path = s['audio'].export('temp.mp3',format='mp3')
-            try:
-                transcript = openai.Audio.transcribe("whisper-1", audio_path)['text']
-            except Exception:
-                transcript = ''
-                pass
-
-            if transcript !='' and transcript != None:
-                s['transcript'] = transcript
-                transcript_summary = f"{s['speaker']} start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" 
+    if  transcript_file != None:
+        with open(transcript_file,'r') as f:
+            sp_chunks_loaded = json.load(f)
+        for i,s in enumerate(sp_chunks_loaded):
+            if s['transcript'] != None:
+                transcript_summary = f"{s['speaker']} start={float(s['start']):.1f}s end={float(s['end']):.1f}s: {s['transcript']}" 
                 if youtube_link != None:
                     transcript_summary += f" {add_query_parameter(youtube_link, {'t':str(int(s['start']))})}"
-                
-                sp_chunks_updated.append({'speaker':s['speaker'], 
-                                          'start':s['start'], 'end':s['end'],
-                                          'duration': s['duration'],'transcript': transcript})
 
-                progress_text = f"Processing {i+1}/{len(sp_chunks)}..."
-                my_bar.progress((i+1)/len(sp_chunks), text=progress_text)
                 st.write(transcript_summary)
+            progress_text = f"Processing {i+1}/{len(sp_chunks_loaded)}..."
+            my_bar.progress((i+1)/len(sp_chunks_loaded), text=progress_text)
 
-    transcript_json = [dict((k, d[k]) for k in ['speaker','start','end','duration','transcript'] if k in d) for d in sp_chunks_updated]
-    transcript_path = f'{audio_name.split(".")[0]}-transcript.json'
+        transcript_json = sp_chunks_loaded
+        transcript_path = f'example-transcript.json'
+
+    else:
+        sp_chunks_updated = []
+        for i,s in enumerate(sp_chunks):
+            if s['duration'] > 0.1:
+                audio_path = s['audio'].export('temp.mp4',format='mp4')
+                try:
+                    transcript = openai.Audio.transcribe("whisper-1", audio_path)['text']
+                except Exception:
+                    transcript = ''
+                    pass
+
+                if transcript !='' and transcript != None:
+                    s['transcript'] = transcript
+                    transcript_summary = f"{s['speaker']} start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" 
+                    if youtube_link != None:
+                        transcript_summary += f" {add_query_parameter(youtube_link, {'t':str(int(s['start']))})}"
+                    
+                    sp_chunks_updated.append({'speaker':s['speaker'], 
+                                            'start':s['start'], 'end':s['end'],
+                                            'duration': s['duration'],'transcript': transcript})
+
+                    progress_text = f"Processing {i+1}/{len(sp_chunks)}..."
+                    my_bar.progress((i+1)/len(sp_chunks), text=progress_text)
+                    st.write(transcript_summary)
+
+        transcript_json = [dict((k, d[k]) for k in ['speaker','start','end','duration','transcript'] if k in d) for d in sp_chunks_updated]
+        transcript_path = f'{audio_name.split(".")[0]}-transcript.json'
 
     with open(transcript_path,'w') as f:
         json.dump(transcript_json, f)
@@ -193,8 +236,8 @@ if "audio" in locals():
                 transcript_path,
             )
 
-        header = ','.join(sp_chunks_updated[0].keys()) + '\n'
-        for s in sp_chunks_updated:
+        header = ','.join(transcript_json[0].keys()) + '\n'
+        for s in transcript_json:
             header += ','.join([str(e) if ',' not in str(e) else '"' + str(e) + '"' for e in s.values()]) + '\n'
 
         transcript_csv_download = convert_df(header)

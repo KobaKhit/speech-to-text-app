@@ -66,8 +66,8 @@ hf_api_key = st.secrets['hf']
 
 st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper ASR")
 
-option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"])
-
+option = st.radio("Select source (rule of thumb, it takes half the duration of the audio to complete processing):", ["Upload an audio file", "Use YouTube link","See Example"])
+st.write('Rule of thumb, it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.')
 # Upload audio file
 if option == "Upload an audio file":
     uploaded_audio = st.file_uploader("Upload an audio file (MP3 or WAV)", type=["mp3", "wav","mp4"])
@@ -188,7 +188,7 @@ if "audio" in locals():
     
     st.divider()
     # # Perform transcription with Whisper ASR
-    st.write('Transcribing using Whisper...')
+    st.write('Transcribing using Whisper API...')
     container = st.container()
 
     progress_text = f"Processing 1/{len(sp_chunks)}..."

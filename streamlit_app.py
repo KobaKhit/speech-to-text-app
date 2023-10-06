@@ -70,7 +70,7 @@ hf_api_key = st.secrets['hf']
 
 st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper ASR")
 
-option = st.radio("Select source (rule of thumb, it takes half the duration of the audio to complete processing):", ["Upload an audio file", "Use YouTube link","See Example"])
+option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"])
 st.write('Rule of thumb, it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.')
 # Upload audio file
 if option == "Upload an audio file":
@@ -126,6 +126,10 @@ if "audio" in locals():
     st.write('Performing Diarization...')
     # create stream
     duration = audio.duration_seconds
+    if duration > 360:
+        st.info('Only processing the first 6 minutes of the audio due to Streamlit.io resource limits.')
+        audio = audio[:360*1000]
+        duration = audio.duration_seconds
     
     
     # Perform diarization with PyAnnote

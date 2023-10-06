@@ -1,0 +1,9 @@
+openai
+pydub
+pytube
+streamlit
+ffmpeg
+openai-whisper
+pyannote.audio
+pyannote.core[notebook]
+streamlit-ext

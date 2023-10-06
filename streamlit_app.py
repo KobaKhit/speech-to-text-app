@@ -55,11 +55,11 @@ def youtube_video_id(value):
     # fail?
     return None
 
-@st.cache_resource
+
 def load_rttm_file(rttm_path):
     return load_rttm(rttm_path)['stream']
 
-@st.cache_resource
+
 def load_audio(uploaded_audio):
     return AudioSegment.from_file(uploaded_audio)
 
@@ -87,7 +87,6 @@ if option == "Upload an audio file":
         
         # sample_rate = st.number_input("Enter the sample rate of the audio", min_value=8000, max_value=48000)
         # audio = audio.set_frame_rate(sample_rate)
-
         
 # use youtube link
 elif option == "Use YouTube link":

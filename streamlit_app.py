@@ -33,11 +33,8 @@ def add_query_parameter(link, params):
 
 
 # Set your OpenAI API, Hugging Face keys
-with open('secrets.json', 'r')as f:
-    secrets = json.load(f)
-
-openai.api_key = secrets['openai']
-hs_api_key = secrets['hf']
+openai.api_key = st.secrets['openai'] 
+hf_api_key = st.secrets['hf']
 
 st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper ASR")
 
@@ -94,7 +91,7 @@ if "audio" in locals():
     # Perform diarization with PyAnnote
     pipeline = Pipeline.from_pretrained(
         "pyannote/speaker-diarization-3.0",
-        use_auth_token="")
+        use_auth_token=hf_api_key)
 
     # run the pipeline on an audio file
     if rttm != None:
@@ -179,7 +176,7 @@ if "audio" in locals():
         json.dump(transcript_json, f)
     
     with container:
-        st.info(f'Saved transcript as {transcript_path}')
+        st.info(f'Completed transcribing')
        
         @st.cache_data
         def convert_df(string):

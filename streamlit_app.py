@@ -59,6 +59,10 @@ def youtube_video_id(value):
 def load_rttm_file(rttm_path):
     return load_rttm(rttm_path)['stream']
 
+@st.cache_resource
+def load_audio(uploaded_audio):
+    return AudioSegment.from_file(uploaded_audio)
+
 
 # Set your OpenAI API, Hugging Face keys
 openai.api_key = st.secrets['openai'] 
@@ -79,7 +83,7 @@ if option == "Upload an audio file":
     if uploaded_audio is not None:
         st.audio(uploaded_audio, format="audio/wav", start_time=0)
         audio_name = uploaded_audio.name
-        audio = AudioSegment.from_file(uploaded_audio)
+        audio = load_audio(uploaded_audio)
         
         # sample_rate = st.number_input("Enter the sample rate of the audio", min_value=8000, max_value=48000)
         # audio = audio.set_frame_rate(sample_rate)
@@ -100,7 +104,7 @@ elif option == "Use YouTube link":
         st.write(f"Fetching audio from YouTube: {youtube_link} - {audio_name}")
         audio_file = audio_stream.download(filename='sample.mp4')
         time.sleep(2)
-        audio = AudioSegment.from_file('sample.mp4')
+        audio = load_audio('sample.mp4')
         st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
         # sample_rate = st.number_input("Enter the sample rate of the audio", min_value=8000, max_value=48000)
         # audio = audio.set_frame_rate(sample_rate)
@@ -110,7 +114,7 @@ elif option == 'See Example':
     youtube_link = 'https://youtu.be/q466E9boFOY?si=A6-yt3CY_aUbYy6W'
     audio_name = 'Stephen A. Smith has JOKES with Shannon Sharpe'
     st.write(f'Loading 1.5 hour audio file from {youtube_link} - Stephen A. Smith has JOKES with Shannon Sharpe 👏😂')
-    audio = AudioSegment.from_file('example/steve a smith jokes.mp4')
+    audio = load_audio('example/steve a smith jokes.mp4')
     rttm = "example/steve a smith jokes.rttm"
     transcript_file = 'example/steve a smith jokes.json'
     st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)

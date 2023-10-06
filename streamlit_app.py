@@ -14,6 +14,7 @@ import json
 import torch
 import urllib.parse as urlparse
 from urllib.parse import urlencode
+import os
 
 import matplotlib
 matplotlib.use('Agg')
@@ -101,6 +102,10 @@ elif option == "Use YouTube link":
         audio_stream = yt.streams.filter(only_audio=True).first()
         audio_name = audio_stream.default_filename
         st.write(f"Fetching audio from YouTube: {youtube_link} - {audio_name}")
+        try:
+            os.remove('sample.mp4')
+        except OSError:
+            pass
         audio_file = audio_stream.download(filename='sample.mp4')
         time.sleep(2)
         audio = load_audio('sample.mp4')

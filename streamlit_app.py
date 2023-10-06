@@ -108,11 +108,12 @@ elif option == "Use YouTube link":
         #     st.write(f"Error: {str(e)}")
 elif option == 'See Example':
     youtube_link = 'https://youtu.be/q466E9boFOY?si=A6-yt3CY_aUbYy6W'
-    audio_name = 'Paul George Steve Balmer Podcast'
-    st.write(f'Loading 1.5 hour audio file from {youtube_link}')
-    audio = AudioSegment.from_file('example/paul-george-steve-balmer.mp4')
-    rttm = "example/paul-geogre-steve-balmer-diarized.rttm"
-    transcript_file = 'example/paul-george-steve-balmer-transcript.json'
+    audio_name = 'Stephen A. Smith has JOKES with Shannon Sharpe'
+    st.write(f'Loading 1.5 hour audio file from {youtube_link} - Stephen A. Smith has JOKES with Shannon Sharpe 👏😂')
+    audio = AudioSegment.from_file('example/steve a smith jokes.mp4')
+    rttm = "example/steve a smith jokes.rttm"
+    transcript_file = 'example/steve a smith jokes.json'
+    st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
     
                                     
 
@@ -270,8 +271,3 @@ if "audio" in locals():
                 f'{audio_name.split(".")[0]}-transcript.csv'
             )
     
-      
-    
-
-    
-    # st.write(transcription_result['text'])

@@ -12,17 +12,18 @@ import asyncio
 import time
 import json
 import torch
+import urllib.parse as urlparse
+from urllib.parse import urlencode
 
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
 def create_audio_stream(audio):
-    return io.BytesIO(audio.export(format="mp4").read())
+    return io.BytesIO(audio.export(format="wav").read())
 
 def add_query_parameter(link, params):
-    import urllib.parse as urlparse
-    from urllib.parse import urlencode
+    
 
     url_parts = list(urlparse.urlparse(link))
     query = dict(urlparse.parse_qsl(url_parts[4]))
@@ -31,6 +32,28 @@ def add_query_parameter(link, params):
     url_parts[4] = urlencode(query)
 
     return urlparse.urlunparse(url_parts)
+
+def youtube_video_id(value):
+    """
+    Examples:
+    - http://youtu.be/SA2iWivDJiE
+    - http://www.youtube.com/watch?v=_oPAwA_Udwc&feature=feedu
+    - http://www.youtube.com/embed/SA2iWivDJiE
+    - http://www.youtube.com/v/SA2iWivDJiE?version=3&amp;hl=en_US
+    """
+    query = urlparse.urlparse(value)
+    if query.hostname == 'youtu.be':
+        return query.path[1:]
+    if query.hostname in ('www.youtube.com', 'youtube.com'):
+        if query.path == '/watch':
+            p = urlparse.parse_qs(query.query)
+            return p['v'][0]
+        if query.path[:7] == '/embed/':
+            return query.path.split('/')[2]
+        if query.path[:3] == '/v/':
+            return query.path.split('/')[2]
+    # fail?
+    return None
 
 @st.cache_resource
 def load_rttm_file(rttm_path):
@@ -42,8 +65,6 @@ openai.api_key = st.secrets['openai']
 hf_api_key = st.secrets['hf']
 
 st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper ASR")
-
-
 
 option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"])
 
@@ -66,11 +87,12 @@ if option == "Upload an audio file":
         
 # use youtube link
 elif option == "Use YouTube link":
-    youtube_link = st.text_input("Enter the YouTube video URL:")
+    youtube_link_raw = st.text_input("Enter the YouTube video URL:")
+    youtube_link = f'https://youtu.be/{youtube_video_id(youtube_link_raw)}'
     with st.expander('Optional Parameters'):
         rttm = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
         transcript_file = st.file_uploader("Upload transcipt json", type=["json"])  
-    if youtube_link:
+    if youtube_link_raw:
         # try:
         yt = YouTube(youtube_link)
         audio_stream = yt.streams.filter(only_audio=True).first()
@@ -191,7 +213,7 @@ if "audio" in locals():
         sp_chunks_updated = []
         for i,s in enumerate(sp_chunks):
             if s['duration'] > 0.1:
-                audio_path = s['audio'].export('temp.mp4',format='mp4')
+                audio_path = s['audio'].export('temp.wav',format='wav')
                 try:
                     transcript = openai.Audio.transcribe("whisper-1", audio_path)['text']
                 except Exception:

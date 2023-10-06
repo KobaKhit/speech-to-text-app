@@ -150,7 +150,7 @@ if "audio" in locals():
     else:
         with ProgressHook() as hook:
             audio_ = create_audio_stream(audio)
-            diarization = pipeline(audio_, hook=hook)
+            diarization = pipeline(audio_, hook=None)
             # dump the diarization output to disk using RTTM format
             with open(f'{audio_name.split(".")[0]}.rttm', "w") as f:
                 diarization.write_rttm(f)

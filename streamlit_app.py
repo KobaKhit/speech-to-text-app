@@ -19,6 +19,11 @@ import matplotlib
 matplotlib.use('Agg')
 from matplotlib import pyplot as plt
 
+st.set_page_config(
+        page_title="Speech-to-chat",
+        page_icon = '🌊'
+)
+
 def create_audio_stream(audio):
     return io.BytesIO(audio.export(format="wav").read())
 
@@ -80,7 +85,7 @@ with st.expander('About'):
     ''')
 
 
-option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"])
+option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"], index=2)
 st.write('Rule of thumb, it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.')
 # Upload audio file
 if option == "Upload an audio file":

@@ -165,7 +165,7 @@ if "audio" in locals():
     # "pyannote/speaker-diarization-3.0",
     # use_auth_token=hf_api_key
     pipeline = Pipeline.from_pretrained(
-       "pyannote/speaker-diarization-3.0")
+       "pyannote/speaker-diarization-3.0", use_auth_token=hf_api_key)
     if torch.cuda.device_count() > 0: # use gpu if available
         pipeline.to(torch.device('cuda'))
 
@@ -227,10 +227,11 @@ if "audio" in locals():
     
     st.divider()
     # # Perform transcription with Whisper ASR
-    st.write('Transcribing using Whisper API...')
+    st.write('Transcribing using Whisper API (150 requests limit)...')
     container = st.container()
 
-    progress_text = f"Processing 1/{len(sp_chunks)}..."
+    limit = 150
+    progress_text = f"Processing 1/{len(sp_chunks[:limit])}..."
     my_bar = st.progress(0, text=progress_text)
     
     if 'transcript_file' in locals() and transcript_file != None:
@@ -251,7 +252,7 @@ if "audio" in locals():
 
     else:
         sp_chunks_updated = []
-        for i,s in enumerate(sp_chunks):
+        for i,s in enumerate(sp_chunks[:limit]):
             if s['duration'] > 0.1:
                 audio_path = s['audio'].export('temp.wav',format='wav')
                 try:
@@ -270,8 +271,8 @@ if "audio" in locals():
                                             'start':s['start'], 'end':s['end'],
                                             'duration': s['duration'],'transcript': transcript})
 
-                    progress_text = f"Processing {i+1}/{len(sp_chunks)}..."
-                    my_bar.progress((i+1)/len(sp_chunks), text=progress_text)
+                    progress_text = f"Processing {i+1}/{len(sp_chunks[:limit])}..."
+                    my_bar.progress((i+1)/len(sp_chunks[:limit]), text=progress_text)
                     st.write(transcript_summary)
 
         transcript_json = [dict((k, d[k]) for k in ['speaker','start','end','duration','transcript'] if k in d) for d in sp_chunks_updated]

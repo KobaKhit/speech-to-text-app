@@ -1,2 +1,4 @@
 test.ipynb
 secrets.toml
+models/*
+models

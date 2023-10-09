@@ -129,12 +129,23 @@ elif option == "Use YouTube link":
         # except Exception as e:
         #     st.write(f"Error: {str(e)}")
 elif option == 'See Example':
-    youtube_link = 'https://youtu.be/q466E9boFOY?si=A6-yt3CY_aUbYy6W'
+    youtube_link = 'https://www.youtube.com/watch?v=TamrOZX9bu8'
     audio_name = 'Stephen A. Smith has JOKES with Shannon Sharpe'
-    st.write(f'Loading 1.5 hour audio file from {youtube_link} - Stephen A. Smith has JOKES with Shannon Sharpe 👏😂')
-    audio = load_audio('example/steve a smith jokes.mp4')
-    rttm = "example/steve a smith jokes.rttm"
-    transcript_file = 'example/steve a smith jokes.json'
+    st.write(f'Loaded audio file from {youtube_link} - Stephen A. Smith has JOKES with Shannon Sharpe 👏😂')
+    if os.path.isfile('example/steve a smith jokes.mp4'):
+        audio = load_audio('example/steve a smith jokes.mp4')
+    else:
+        yt = YouTube(youtube_link)
+        audio_stream = yt.streams.filter(only_audio=True).first()
+        audio_file = audio_stream.download(filename='sample.mp4')
+        time.sleep(2)
+        audio = load_audio('sample.mp4')
+
+    if os.path.isfile("example/steve a smith jokes.rttm"):
+        rttm = "example/steve a smith jokes.rttm"
+    if os.path.isfile('example/steve a smith jokes.json'):
+        transcript_file = 'example/steve a smith jokes.json'
+
     st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
     
                                     
@@ -151,14 +162,15 @@ if "audio" in locals():
     
     
     # Perform diarization with PyAnnote
+    # "pyannote/speaker-diarization-3.0",
+    # use_auth_token=hf_api_key
     pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-3.0",
-        use_auth_token=hf_api_key)
+       "pyannote/speaker-diarization-3.0")
     if torch.cuda.device_count() > 0: # use gpu if available
         pipeline.to(torch.device('cuda'))
 
     # run the pipeline on an audio file
-    if rttm != None:
+    if 'rttm' in locals() and rttm != None:
         st.write(f'Loading {rttm}')
         diarization = load_rttm_file(rttm)
     else:
@@ -187,7 +199,7 @@ if "audio" in locals():
         temp = {'speaker': speaker,
                 'start': turn.start, 'end': turn.end, 'duration': turn.end-turn.start,
                 'audio': audio[turn.start*1000:turn.end*1000]}
-        if transcript_file == None:
+        if 'transcript_file' in locals() and transcript_file == None:
             temp['audio_stream'] = create_audio_stream(audio[turn.start*1000:turn.end*1000])
         sp_chunks.append(temp)
 
@@ -221,7 +233,7 @@ if "audio" in locals():
     progress_text = f"Processing 1/{len(sp_chunks)}..."
     my_bar = st.progress(0, text=progress_text)
     
-    if  transcript_file != None:
+    if 'transcript_file' in locals() and transcript_file != None:
         with open(transcript_file,'r') as f:
             sp_chunks_loaded = json.load(f)
         for i,s in enumerate(sp_chunks_loaded):

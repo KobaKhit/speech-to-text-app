@@ -3,6 +3,7 @@ import streamlit_ext as ste
 import openai
 from pydub import AudioSegment
 from pytube import YouTube
+import pytube
 import io
 from pyannote.audio import Pipeline
 from pyannote.audio.pipelines.utils.hook import ProgressHook
@@ -84,7 +85,7 @@ with st.expander('About'):
         A local version with access to a GPU can process 1 hour of audio in 1 to 5 minutes.
         If you would like to use this app at scale reach out directly [🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
         
-        [reddit thread]({reddit_thread})        [github repo](https://github.com/KobaKhit/speech-to-text-app)
+        [reddit thread]({reddit_thread})    [github repo](https://github.com/KobaKhit/speech-to-text-app)
     ''')
 
 
@@ -114,11 +115,13 @@ elif option == "Use YouTube link":
         rttm = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
         transcript_file = st.file_uploader("Upload transcipt json", type=["json"])  
     if youtube_link_raw:
-        # try:
-        yt = YouTube(youtube_link)
-        audio_stream = yt.streams.filter(only_audio=True).first()
-        audio_name = audio_stream.default_filename
-        st.write(f"Fetching audio from YouTube: {youtube_link} - {audio_name}")
+        try:
+            yt = YouTube(youtube_link)
+            audio_stream = yt.streams.filter(only_audio=True).first()
+            audio_name = audio_stream.default_filename
+            st.write(f"Fetching audio from YouTube: {youtube_link} - {audio_name}")
+        except pytube.exceptions.AgeRestrictedError:
+            st.stop('Age restricted videos cannot be processed.')
         try:
             os.remove('sample.mp4')
         except OSError:

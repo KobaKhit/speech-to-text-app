@@ -72,8 +72,9 @@ openai.api_key = st.secrets['openai']
 hf_api_key = st.secrets['hf']
 
 st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper")
+reddit_thread = 'https://www.reddit.com/r/dataisbeautiful/comments/17413bq/oc_speech_diarization_app_that_transcribes_audio'
 with st.expander('About'):
-    st.markdown('''
+    st.markdown(f'''
         Given an audio file this app will
           - [x] 1. Identify and diarize the speakers using [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
           - [x] 2. Transcribe the video and attribute to speakers using [OpenAi Whisper API](https://platform.openai.com/docs/guides/speech-to-text/quickstart)
@@ -81,7 +82,9 @@ with st.expander('About'):
 
         This version will only process up to first 6 minutes of an audio file due to limited resources of Streamlit.io apps.
         A local version with access to a GPU can process 1 hour of audio in 1 to 5 minutes.
-        If you would like to use this app at scale reach out directly!
+        If you would like to use this app at scale reach out directly [🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
+        
+        [reddit thread]({reddit_thread})        [github repo](https://github.com/KobaKhit/speech-to-text-app)
     ''')
 
 

@@ -85,7 +85,7 @@ with st.expander('About', expanded=True):
         A local version with access to a GPU can process 1 hour of audio in 1 to 5 minutes.
         If you would like to use this app at scale reach out directly by creating an issue on github [🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
         
-        Rule of thumb, for this version Streamlit.io hosted app it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.
+        Rule of thumb, for this Streamlit.io hosted app it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.
 
         [github repo](https://github.com/KobaKhit/speech-to-text-app)
     ''')

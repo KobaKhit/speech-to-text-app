@@ -111,8 +111,10 @@ if option == "Upload an audio file":
         
 # use youtube link
 elif option == "Use YouTube link":
+    
     youtube_link_raw = st.text_input("Enter the YouTube video URL:")
     youtube_link = f'https://youtu.be/{youtube_video_id(youtube_link_raw)}'
+
     with st.expander('Optional Parameters'):
         rttm = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
         transcript_file = st.file_uploader("Upload transcipt json", type=["json"])  
@@ -124,6 +126,7 @@ elif option == "Use YouTube link":
             st.write(f"Fetching audio from YouTube: {youtube_link} - {audio_name}")
         except pytube.exceptions.AgeRestrictedError:
             st.stop('Age restricted videos cannot be processed.')
+
         try:
             os.remove('sample.mp4')
         except OSError:
@@ -220,15 +223,16 @@ if "audio" in locals():
     st.pyplot(figure)
 
     st.write('Speakers and Audio Samples')
-    for speaker in set(s['speaker'] for s in sp_chunks):
-        temp = max(filter(lambda d: d['speaker'] == speaker, sp_chunks), key=lambda x: x['duration'])
-        speak_time = sum(c['duration'] for c in filter(lambda d: d['speaker'] == speaker, sp_chunks))
-        rate = 100*min((speak_time, duration))/duration
-        speaker_summary  = f"{temp['speaker']} ({round(rate)}% of video duration): start={temp['start']:.1f}s stop={temp['end']:.1f}s"
-        if youtube_link != None:
-            speaker_summary += f" {add_query_parameter(youtube_link, {'t':str(int(temp['start']))})}"
-        st.write(speaker_summary)
-        st.audio(create_audio_stream(temp['audio']))
+    with st.expander('Samples', expanded=True):
+        for speaker in set(s['speaker'] for s in sp_chunks):
+            temp = max(filter(lambda d: d['speaker'] == speaker, sp_chunks), key=lambda x: x['duration'])
+            speak_time = sum(c['duration'] for c in filter(lambda d: d['speaker'] == speaker, sp_chunks))
+            rate = 100*min((speak_time, duration))/duration
+            speaker_summary  = f"{temp['speaker']} ({round(rate)}% of video duration): start={temp['start']:.1f}s stop={temp['end']:.1f}s"
+            if youtube_link != None:
+                speaker_summary += f" {add_query_parameter(youtube_link, {'t':str(int(temp['start']))})}"
+            st.write(speaker_summary)
+            st.audio(create_audio_stream(temp['audio']))
 
 
     # st.write("Transcription with Whisper ASR:")
@@ -241,50 +245,50 @@ if "audio" in locals():
     limit = 150
     progress_text = f"Processing 1/{len(sp_chunks[:limit])}..."
     my_bar = st.progress(0, text=progress_text)
-    
-    if 'transcript_file' in locals() and transcript_file != None:
-        with open(transcript_file,'r') as f:
-            sp_chunks_loaded = json.load(f)
-        for i,s in enumerate(sp_chunks_loaded):
-            if s['transcript'] != None:
-                transcript_summary = f"{s['speaker']} start={float(s['start']):.1f}s end={float(s['end']):.1f}s: {s['transcript']}" 
-                if youtube_link != None:
-                    transcript_summary += f" {add_query_parameter(youtube_link, {'t':str(int(s['start']))})}"
-
-                st.write(transcript_summary)
-            progress_text = f"Processing {i+1}/{len(sp_chunks_loaded)}..."
-            my_bar.progress((i+1)/len(sp_chunks_loaded), text=progress_text)
-
-        transcript_json = sp_chunks_loaded
-        transcript_path = f'example-transcript.json'
-
-    else:
-        sp_chunks_updated = []
-        for i,s in enumerate(sp_chunks[:limit]):
-            if s['duration'] > 0.1:
-                audio_path = s['audio'].export('temp.wav',format='wav')
-                try:
-                    transcript = openai.Audio.transcribe("whisper-1", audio_path)['text']
-                except Exception:
-                    transcript = ''
-                    pass
-
-                if transcript !='' and transcript != None:
-                    s['transcript'] = transcript
-                    transcript_summary = f"{s['speaker']} start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" 
+    with st.expander('Transcript', expanded=True):
+        if 'transcript_file' in locals() and transcript_file != None:
+            with open(transcript_file,'r') as f:
+                sp_chunks_loaded = json.load(f)
+            for i,s in enumerate(sp_chunks_loaded):
+                if s['transcript'] != None:
+                    transcript_summary = f"{s['speaker']} start={float(s['start']):.1f}s end={float(s['end']):.1f}s: {s['transcript']}" 
                     if youtube_link != None:
                         transcript_summary += f" {add_query_parameter(youtube_link, {'t':str(int(s['start']))})}"
-                    
-                    sp_chunks_updated.append({'speaker':s['speaker'], 
-                                            'start':s['start'], 'end':s['end'],
-                                            'duration': s['duration'],'transcript': transcript})
 
-                    progress_text = f"Processing {i+1}/{len(sp_chunks[:limit])}..."
-                    my_bar.progress((i+1)/len(sp_chunks[:limit]), text=progress_text)
                     st.write(transcript_summary)
+                progress_text = f"Processing {i+1}/{len(sp_chunks_loaded)}..."
+                my_bar.progress((i+1)/len(sp_chunks_loaded), text=progress_text)
 
-        transcript_json = [dict((k, d[k]) for k in ['speaker','start','end','duration','transcript'] if k in d) for d in sp_chunks_updated]
-        transcript_path = f'{audio_name.split(".")[0]}-transcript.json'
+            transcript_json = sp_chunks_loaded
+            transcript_path = f'example-transcript.json'
+
+        else:
+            sp_chunks_updated = []
+            for i,s in enumerate(sp_chunks[:limit]):
+                if s['duration'] > 0.1:
+                    audio_path = s['audio'].export('temp.wav',format='wav')
+                    try:
+                        transcript = openai.Audio.transcribe("whisper-1", audio_path)['text']
+                    except Exception:
+                        transcript = ''
+                        pass
+
+                    if transcript !='' and transcript != None:
+                        s['transcript'] = transcript
+                        transcript_summary = f"{s['speaker']} start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" 
+                        if youtube_link != None:
+                            transcript_summary += f" {add_query_parameter(youtube_link, {'t':str(int(s['start']))})}"
+                        
+                        sp_chunks_updated.append({'speaker':s['speaker'], 
+                                                'start':s['start'], 'end':s['end'],
+                                                'duration': s['duration'],'transcript': transcript})
+
+                        progress_text = f"Processing {i+1}/{len(sp_chunks[:limit])}..."
+                        my_bar.progress((i+1)/len(sp_chunks[:limit]), text=progress_text)
+                        st.write(transcript_summary)
+
+            transcript_json = [dict((k, d[k]) for k in ['speaker','start','end','duration','transcript'] if k in d) for d in sp_chunks_updated]
+            transcript_path = f'{audio_name.split(".")[0]}-transcript.json'
 
     with open(transcript_path,'w') as f:
         json.dump(transcript_json, f)

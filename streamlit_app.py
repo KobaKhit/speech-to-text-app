@@ -68,29 +68,31 @@ def load_audio(uploaded_audio):
     return AudioSegment.from_file(uploaded_audio)
 
 
-# Set your OpenAI API, Hugging Face keys
+# Set your OpenAI, Hugging Face API keys
 openai.api_key = st.secrets['openai'] 
 hf_api_key = st.secrets['hf']
 
 st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper")
 reddit_thread = 'https://www.reddit.com/r/dataisbeautiful/comments/17413bq/oc_speech_diarization_app_that_transcribes_audio'
-with st.expander('About'):
+with st.expander('About', expanded=True):
     st.markdown(f'''
         Given an audio file this app will
-          - [x] 1. Identify and diarize the speakers using [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
-          - [x] 2. Transcribe the video and attribute to speakers using [OpenAi Whisper API](https://platform.openai.com/docs/guides/speech-to-text/quickstart)
+          - [x] 1. Identify and diarize the speakers using `pyannote` [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
+          - [x] 2. Transcribe the audio and attribute to speakers using [OpenAi Whisper API](https://platform.openai.com/docs/guides/speech-to-text/quickstart)
           - [ ] 3. Set up an LLM chat with the transcript loaded into its knowledge database, so that a user can "talk" to the transcript of the audio file (WIP)
 
         This version will only process up to first 6 minutes of an audio file due to limited resources of Streamlit.io apps.
         A local version with access to a GPU can process 1 hour of audio in 1 to 5 minutes.
-        If you would like to use this app at scale reach out directly [🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
+        If you would like to use this app at scale reach out directly by creating an issue on github [🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
         
-        [reddit thread]({reddit_thread})    [github repo](https://github.com/KobaKhit/speech-to-text-app)
+        Rule of thumb, for this version Streamlit.io hosted app it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.
+
+        [github repo](https://github.com/KobaKhit/speech-to-text-app)
     ''')
 
 
 option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"], index=2)
-st.write('Rule of thumb, it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.')
+
 # Upload audio file
 if option == "Upload an audio file":
     uploaded_audio = st.file_uploader("Upload an audio file (MP3 or WAV)", type=["mp3", "wav","mp4"])

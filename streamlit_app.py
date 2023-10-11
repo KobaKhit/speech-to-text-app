@@ -119,11 +119,12 @@ elif option == "Use YouTube link":
         rttm = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
         transcript_file = st.file_uploader("Upload transcipt json", type=["json"])  
     if youtube_link_raw:
+        st.write(f"Fetching audio from YouTube: {youtube_link}")
         try:
             yt = YouTube(youtube_link)
             audio_stream = yt.streams.filter(only_audio=True).first()
             audio_name = audio_stream.default_filename
-            st.write(f"Fetching audio from YouTube: {youtube_link} - {audio_name}")
+            st.write(f"Downloaded {audio_name}")
         except pytube.exceptions.AgeRestrictedError:
             st.stop('Age restricted videos cannot be processed.')
 

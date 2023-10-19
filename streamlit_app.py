@@ -22,7 +22,8 @@ from matplotlib import pyplot as plt
 
 st.set_page_config(
         page_title="Speech-to-chat",
-        page_icon = '🌊'
+        page_icon = '🌊',
+        layout='wide'
 )
 
 # Set your OpenAI, Hugging Face API keys
@@ -106,30 +107,48 @@ initial_prompt =  [{"role": "system", "content": "You are helping to analyze and
                    {"role": 'user', "content": 'Please summarize briefly the following transcript\n{}'}]
 if "messages" not in st.session_state:
     st.session_state.messages = initial_prompt 
-
-
     
 
 st.title("Speech to Chat")
 reddit_thread = 'https://www.reddit.com/r/dataisbeautiful/comments/17413bq/oc_speech_diarization_app_that_transcribes_audio'
-with st.expander('About', expanded=True):
-    st.markdown(f'''
-        Given an audio file this app will
-          - [x] 1. Identify and diarize the speakers using `pyannote` [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
-          - [x] 2. Transcribe the audio and attribute to speakers using [OpenAi Whisper API](https://platform.openai.com/docs/guides/speech-to-text/quickstart)
-          - [ ] 3. Set up an LLM chat with the transcript loaded into its knowledge database, so that a user can "talk" to the transcript of the audio file (WIP)
 
-        This version will only process up to first 6 minutes of an audio file due to limited resources of Streamlit.io apps.
+with st.sidebar:
+    st.markdown('''
+    # How to Use
+
+      1. Enter a youtube link or upload an audio file.
+      2. "Chat" with the file.
+
+      Example prompts:
+      - Which speaker spoke the most?
+      - What are important keywords in the transcript for SEO?
+    ''')
+
+    st.divider()
+
+    st.markdown(f'''
+        # About 
+
+        Given an audio file or a youtube link this app will
+          - [x] 1. Parition the audio according to the identity of each speaker (diarization) using `pyannote` [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
+          - [x] 2. Transcribe each audio segment using [OpenAi Whisper API](https://platform.openai.com/docs/guides/speech-to-text/quickstart)
+          - [x] 3. Set up an LLM chat with the transcript loaded into its knowledge database, so that a user can "talk" to the transcript of the audio file.
+
+        This version will only process up to first 6 minutes of an audio file due to limited resources of free tier Streamlit.io/HuggingFace Spaces.
         A local version with access to a GPU can process 1 hour of audio in 1 to 5 minutes.
         If you would like to use this app at scale reach out directly by creating an issue on [github🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
         
-        Rule of thumb, for this Streamlit.io hosted app it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.
+        Rule of thumb, for this free tier hosted app it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.
 
-        [github repo](https://github.com/KobaKhit/speech-to-text-app)
+        Made by [kobakhit](https://github.com/KobaKhit/speech-to-text-app)
     ''')
 
 
-option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","See Example"], index=2)
+# Chat container
+container_transcript_chat = st.container()
+
+# Source Selection
+option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link","Example"], index=2)
 
 # Upload audio file
 if option == "Upload an audio file":
@@ -172,7 +191,7 @@ elif option == "Use YouTube link":
         # audio = audio.set_frame_rate(sample_rate)
         # except Exception as e:
         #     st.write(f"Error: {str(e)}")
-elif option == 'See Example':
+elif option == 'Example':
     youtube_link = 'https://www.youtube.com/watch?v=TamrOZX9bu8'
     audio_name = 'Stephen A. Smith has JOKES with Shannon Sharpe'
     st.write(f'Loaded audio file from {youtube_link} - {audio_name} 👏😂')
@@ -191,11 +210,9 @@ elif option == 'See Example':
         st.session_state.transcript_file = 'example/steve a smith jokes.json'
 
     st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
-    
-                                    
+
 # Diarize
 if "audio" in locals():
-    st.write('Performing Diarization...')
     # create stream
     duration = audio.duration_seconds
     if duration > 360:
@@ -205,26 +222,25 @@ if "audio" in locals():
     
     
     # Perform diarization with PyAnnote
-    # "pyannote/speaker-diarization-3.0",
-    # use_auth_token=hf_api_key
     pipeline = Pipeline.from_pretrained(
        "pyannote/speaker-diarization-3.0", use_auth_token=hf_api_key)
     if torch.cuda.device_count() > 0: # use gpu if available
         pipeline.to(torch.device('cuda'))
 
     # run the pipeline on an audio file
-    if 'rttm' in st.session_state and st.session_state.rttm != None:
-        st.write(f'Loading {st.session_state.rttm}')
-        diarization = load_rttm_file(st.session_state.rttm )
-    else:
-        # with ProgressHook() as hook:
-        audio_ = create_audio_stream(audio)
-        # diarization = pipeline(audio_, hook=hook)
-        diarization = pipeline(audio_)
-        # dump the diarization output to disk using RTTM format
-        with open(f'{audio_name.split(".")[0]}.rttm', "w") as f:
-            diarization.write_rttm(f)
-        st.session_state.rttm = f'{audio_name.split(".")[0]}.rttm'
+    with st.spinner('Performing Diarization...'):
+        if 'rttm' in st.session_state and st.session_state.rttm != None:
+            st.write(f'Loading {st.session_state.rttm}')
+            diarization = load_rttm_file(st.session_state.rttm )
+        else:
+            # with ProgressHook() as hook:
+            audio_ = create_audio_stream(audio)
+            # diarization = pipeline(audio_, hook=hook)
+            diarization = pipeline(audio_)
+            # dump the diarization output to disk using RTTM format
+            with open(f'{audio_name.split(".")[0]}.rttm', "w") as f:
+                diarization.write_rttm(f)
+            st.session_state.rttm = f'{audio_name.split(".")[0]}.rttm'
     
     # Display the diarization results
     st.write("Diarization Results:")
@@ -256,7 +272,7 @@ if "audio" in locals():
     st.pyplot(figure)
 
     st.write('Speakers and Audio Samples')
-    with st.expander('Samples', expanded=False):
+    with st.expander('Samples', expanded=True):
         for speaker in set(s['speaker'] for s in sp_chunks):
             temp = max(filter(lambda d: d['speaker'] == speaker, sp_chunks), key=lambda x: x['duration'])
             speak_time = sum(c['duration'] for c in filter(lambda d: d['speaker'] == speaker, sp_chunks))
@@ -266,16 +282,12 @@ if "audio" in locals():
                 speaker_summary += f" {add_query_parameter(youtube_link, {'t':str(int(temp['start']))})}"
             st.write(speaker_summary)
             st.audio(create_audio_stream(temp['audio']))
-
-
-    # st.write("Transcription with Whisper ASR:")
     
     st.divider()
     # # Perform transcription with Whisper ASR
 
     
     # Transcript containers
-    container_transcript_chat = st.container()
     st.write('Transcribing using Whisper API (150 requests limit)...')
     container_transcript_completed = st.container()
 
@@ -359,7 +371,7 @@ if "audio" in locals():
 
             # chat field
             with st.form("Chat",clear_on_submit=True):
-                prompt = st.text_input("Chat with the Transcript (2 prompts limit)")
+                prompt = st.text_input('Chat with the Transcript (2 prompts limit)')
                 st.form_submit_button()
             
             # message list

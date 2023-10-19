@@ -157,7 +157,7 @@ with st.sidebar:
 container_transcript_chat = st.container()
 
 # Source Selection
-option = st.radio("Select source:", [ "Use YouTube link","Example"], index=1)
+option = st.radio("Select source:", [ "Use YouTube link","Example"], index=0)
 
 # Upload audio file
 if option == "Upload an audio file":

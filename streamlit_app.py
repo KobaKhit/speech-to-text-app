@@ -25,6 +25,13 @@ st.set_page_config(
         page_icon = '🌊'
 )
 
+# Set your OpenAI, Hugging Face API keys
+openai.api_key = st.secrets['openai'] 
+hf_api_key = st.secrets['hf']
+
+TRANSCRIPTION_REQUEST_LIMIT = 150
+PROMPT_REQUEST_LIMIT = 2
+
 def create_audio_stream(audio):
     return io.BytesIO(audio.export(format="wav").read())
 
@@ -59,20 +66,51 @@ def youtube_video_id(value):
     # fail?
     return None
 
+@st.cache_data
+def process_youtube_link(youtube_link):
+    st.write(f"Fetching audio from YouTube: {youtube_link}")
+    try:
+        yt = YouTube(youtube_link)
+        audio_stream = yt.streams.filter(only_audio=True).first()
+        audio_name = audio_stream.default_filename
+        st.write(f"Downloaded {audio_name}")
+    except pytube.exceptions.AgeRestrictedError:
+        st.stop('Age restricted videos cannot be processed.')
 
+    try:
+        os.remove('sample.mp4')
+    except OSError:
+        pass
+    audio_file = audio_stream.download(filename='sample.mp4')
+    time.sleep(2)
+    audio = load_audio('sample.mp4')
+    st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
+    return audio, audio_name
+
+@st.cache_data
 def load_rttm_file(rttm_path):
     return load_rttm(rttm_path)['stream']
 
-
+@st.cache_resource
 def load_audio(uploaded_audio):
     return AudioSegment.from_file(uploaded_audio)
 
 
-# Set your OpenAI, Hugging Face API keys
-openai.api_key = st.secrets['openai'] 
-hf_api_key = st.secrets['hf']
+if "openai_model" not in st.session_state:
+    st.session_state["openai_model"] = "gpt-3.5-turbo"
 
-st.title("Speech Diarization and Speech-to-Text with PyAnnote and Whisper")
+if "prompt_request_counter" not in st.session_state:
+    st.session_state["prompt_request_counter"] = 0
+
+initial_prompt =  [{"role": "system", "content": "You are helping to analyze and summarize a transcript of a conversation."},
+                   {"role": 'user', "content": 'Please summarize briefly the following transcript\n{}'}]
+if "messages" not in st.session_state:
+    st.session_state.messages = initial_prompt 
+
+
+    
+
+st.title("Speech to Chat")
 reddit_thread = 'https://www.reddit.com/r/dataisbeautiful/comments/17413bq/oc_speech_diarization_app_that_transcribes_audio'
 with st.expander('About', expanded=True):
     st.markdown(f'''
@@ -83,7 +121,7 @@ with st.expander('About', expanded=True):
 
         This version will only process up to first 6 minutes of an audio file due to limited resources of Streamlit.io apps.
         A local version with access to a GPU can process 1 hour of audio in 1 to 5 minutes.
-        If you would like to use this app at scale reach out directly by creating an issue on github [🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
+        If you would like to use this app at scale reach out directly by creating an issue on [github🤖](https://github.com/KobaKhit/speech-to-text-app/issues)!
         
         Rule of thumb, for this Streamlit.io hosted app it takes half the duration of the audio to complete processing, ex. g. 6 minute youtube video will take 3 minutes to diarize.
 
@@ -95,10 +133,13 @@ option = st.radio("Select source:", ["Upload an audio file", "Use YouTube link",
 
 # Upload audio file
 if option == "Upload an audio file":
-    uploaded_audio = st.file_uploader("Upload an audio file (MP3 or WAV)", type=["mp3", "wav","mp4"])
+    with st.form('uploaded-file', clear_on_submit=True):
+        uploaded_audio = st.file_uploader("Upload an audio file (MP3 or WAV)", type=["mp3", "wav","mp4"])
+        st.form_submit_button()
+        if st.form_submit_button(): st.session_state.messages = initial_prompt
     with st.expander('Optional Parameters'):
-        rttm = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
-        transcript_file = st.file_uploader("Upload transcipt json", type=["json"])
+        # st.session_state.rttm  = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
+        # st.session_state.transcript_file = st.file_uploader("Upload transcipt json", type=["json"])
         youtube_link = st.text_input('Youtube link of the audio sample')
 
     if uploaded_audio is not None:
@@ -110,32 +151,23 @@ if option == "Upload an audio file":
         # audio = audio.set_frame_rate(sample_rate)
         
 # use youtube link
-elif option == "Use YouTube link":
-    
-    youtube_link_raw = st.text_input("Enter the YouTube video URL:")
-    youtube_link = f'https://youtu.be/{youtube_video_id(youtube_link_raw)}'
+elif option == "Use YouTube link":        
 
-    with st.expander('Optional Parameters'):
-        rttm = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
-        transcript_file = st.file_uploader("Upload transcipt json", type=["json"])  
+    with st.form('youtube-link', clear_on_submit=True):
+        youtube_link_raw = st.text_input("Enter the YouTube video URL:")
+        youtube_link = f'https://youtu.be/{youtube_video_id(youtube_link_raw)}'
+        
+        if st.form_submit_button(): # reset variables on new link submit
+            st.session_state.messages = initial_prompt
+            st.session_state.rttm = None
+            st.session_state.transcript_file = None
+            st.session_state.prompt_request_counter = 0
+
+    # with st.expander('Optional Parameters'):
+    #     st.session_state.rttm = st.file_uploader("Upload .rttm if you already have one", type=["rttm"])
+    #     st.session_state.transcript_file = st.file_uploader("Upload transcipt json", type=["json"])  
     if youtube_link_raw:
-        st.write(f"Fetching audio from YouTube: {youtube_link}")
-        try:
-            yt = YouTube(youtube_link)
-            audio_stream = yt.streams.filter(only_audio=True).first()
-            audio_name = audio_stream.default_filename
-            st.write(f"Downloaded {audio_name}")
-        except pytube.exceptions.AgeRestrictedError:
-            st.stop('Age restricted videos cannot be processed.')
-
-        try:
-            os.remove('sample.mp4')
-        except OSError:
-            pass
-        audio_file = audio_stream.download(filename='sample.mp4')
-        time.sleep(2)
-        audio = load_audio('sample.mp4')
-        st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
+        audio, audio_name = process_youtube_link(youtube_link)
         # sample_rate = st.number_input("Enter the sample rate of the audio", min_value=8000, max_value=48000)
         # audio = audio.set_frame_rate(sample_rate)
         # except Exception as e:
@@ -143,7 +175,7 @@ elif option == "Use YouTube link":
 elif option == 'See Example':
     youtube_link = 'https://www.youtube.com/watch?v=TamrOZX9bu8'
     audio_name = 'Stephen A. Smith has JOKES with Shannon Sharpe'
-    st.write(f'Loaded audio file from {youtube_link} - Stephen A. Smith has JOKES with Shannon Sharpe 👏😂')
+    st.write(f'Loaded audio file from {youtube_link} - {audio_name} 👏😂')
     if os.path.isfile('example/steve a smith jokes.mp4'):
         audio = load_audio('example/steve a smith jokes.mp4')
     else:
@@ -154,14 +186,13 @@ elif option == 'See Example':
         audio = load_audio('sample.mp4')
 
     if os.path.isfile("example/steve a smith jokes.rttm"):
-        rttm = "example/steve a smith jokes.rttm"
+        st.session_state.rttm = "example/steve a smith jokes.rttm"
     if os.path.isfile('example/steve a smith jokes.json'):
-        transcript_file = 'example/steve a smith jokes.json'
+        st.session_state.transcript_file = 'example/steve a smith jokes.json'
 
     st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
     
                                     
-
 # Diarize
 if "audio" in locals():
     st.write('Performing Diarization...')
@@ -182,9 +213,9 @@ if "audio" in locals():
         pipeline.to(torch.device('cuda'))
 
     # run the pipeline on an audio file
-    if 'rttm' in locals() and rttm != None:
-        st.write(f'Loading {rttm}')
-        diarization = load_rttm_file(rttm)
+    if 'rttm' in st.session_state and st.session_state.rttm != None:
+        st.write(f'Loading {st.session_state.rttm}')
+        diarization = load_rttm_file(st.session_state.rttm )
     else:
         # with ProgressHook() as hook:
         audio_ = create_audio_stream(audio)
@@ -193,6 +224,7 @@ if "audio" in locals():
         # dump the diarization output to disk using RTTM format
         with open(f'{audio_name.split(".")[0]}.rttm', "w") as f:
             diarization.write_rttm(f)
+        st.session_state.rttm = f'{audio_name.split(".")[0]}.rttm'
     
     # Display the diarization results
     st.write("Diarization Results:")
@@ -211,7 +243,7 @@ if "audio" in locals():
         temp = {'speaker': speaker,
                 'start': turn.start, 'end': turn.end, 'duration': turn.end-turn.start,
                 'audio': audio[turn.start*1000:turn.end*1000]}
-        if 'transcript_file' in locals() and transcript_file == None:
+        if 'transcript_file' in st.session_state and st.session_state.transcript_file == None:
             temp['audio_stream'] = create_audio_stream(audio[turn.start*1000:turn.end*1000])
         sp_chunks.append(temp)
 
@@ -224,7 +256,7 @@ if "audio" in locals():
     st.pyplot(figure)
 
     st.write('Speakers and Audio Samples')
-    with st.expander('Samples', expanded=True):
+    with st.expander('Samples', expanded=False):
         for speaker in set(s['speaker'] for s in sp_chunks):
             temp = max(filter(lambda d: d['speaker'] == speaker, sp_chunks), key=lambda x: x['duration'])
             speak_time = sum(c['duration'] for c in filter(lambda d: d['speaker'] == speaker, sp_chunks))
@@ -240,32 +272,36 @@ if "audio" in locals():
     
     st.divider()
     # # Perform transcription with Whisper ASR
-    st.write('Transcribing using Whisper API (150 requests limit)...')
-    container = st.container()
 
-    limit = 150
-    progress_text = f"Processing 1/{len(sp_chunks[:limit])}..."
+    
+    # Transcript containers
+    container_transcript_chat = st.container()
+    st.write('Transcribing using Whisper API (150 requests limit)...')
+    container_transcript_completed = st.container()
+
+    progress_text = f"Processing 1/{len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT])}..."
     my_bar = st.progress(0, text=progress_text)
+    # rework the loop. Simplify if Else
     with st.expander('Transcript', expanded=True):
-        if 'transcript_file' in locals() and transcript_file != None:
-            with open(transcript_file,'r') as f:
+        if 'transcript_file' in st.session_state and st.session_state.transcript_file != None:
+            with open(st.session_state.transcript_file,'r') as f:
                 sp_chunks_loaded = json.load(f)
             for i,s in enumerate(sp_chunks_loaded):
                 if s['transcript'] != None:
-                    transcript_summary = f"{s['speaker']} start={float(s['start']):.1f}s end={float(s['end']):.1f}s: {s['transcript']}" 
-                    if youtube_link != None:
+                    transcript_summary = f"**{s['speaker']}** start={float(s['start']):.1f}s end={float(s['end']):.1f}s: {s['transcript']}" 
+                    if youtube_link != None and youtube_link != '':
                         transcript_summary += f" {add_query_parameter(youtube_link, {'t':str(int(s['start']))})}"
 
-                    st.write(transcript_summary)
+                    st.markdown(transcript_summary)
                 progress_text = f"Processing {i+1}/{len(sp_chunks_loaded)}..."
                 my_bar.progress((i+1)/len(sp_chunks_loaded), text=progress_text)
 
             transcript_json = sp_chunks_loaded
-            transcript_path = f'example-transcript.json'
+            transcript_path = f'{audio_name.split(".mp4")[0]}-transcript.json'
 
         else:
             sp_chunks_updated = []
-            for i,s in enumerate(sp_chunks[:limit]):
+            for i,s in enumerate(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT]):
                 if s['duration'] > 0.1:
                     audio_path = s['audio'].export('temp.wav',format='wav')
                     try:
@@ -276,7 +312,7 @@ if "audio" in locals():
 
                     if transcript !='' and transcript != None:
                         s['transcript'] = transcript
-                        transcript_summary = f"{s['speaker']} start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" 
+                        transcript_summary = f"**{s['speaker']}** start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" 
                         if youtube_link != None:
                             transcript_summary += f" {add_query_parameter(youtube_link, {'t':str(int(s['start']))})}"
                         
@@ -284,27 +320,101 @@ if "audio" in locals():
                                                 'start':s['start'], 'end':s['end'],
                                                 'duration': s['duration'],'transcript': transcript})
 
-                        progress_text = f"Processing {i+1}/{len(sp_chunks[:limit])}..."
-                        my_bar.progress((i+1)/len(sp_chunks[:limit]), text=progress_text)
-                        st.write(transcript_summary)
+                        progress_text = f"Processing {i+1}/{len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT])}..."
+                        my_bar.progress((i+1)/len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT]), text=progress_text)
+                        st.markdown(transcript_summary)
 
             transcript_json = [dict((k, d[k]) for k in ['speaker','start','end','duration','transcript'] if k in d) for d in sp_chunks_updated]
-            transcript_path = f'{audio_name.split(".")[0]}-transcript.json'
+            transcript_path = f'{audio_name.split(".mp4")[0]}-transcript.json'
+            st.session_state.transcript_file = transcript_path
 
+    # save the trancript file
     with open(transcript_path,'w') as f:
         json.dump(transcript_json, f)
+
+    # generate transcript string
+    transcript_string = '\n'.join([f"{s['speaker']} start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" for s in transcript_json])
     
-    with container:
+    @st.cache_data
+    def get_initial_response(transcript):
+        st.session_state.messages[1]['content'] = st.session_state.messages[1]['content'].format(transcript)
+        initial_response = openai.ChatCompletion.create(
+                            model=st.session_state["openai_model"],
+                            messages=st.session_state.messages
+                        )
+        return initial_response['choices'][0]['message']['content']
+    
+    # Chat container
+    with container_transcript_chat:
+        # get a summary of transcript from ChatGpt
+        init = get_initial_response(transcript_string)
+        # pass transcript to initial prompt
+        st.session_state.messages[1]['content'] = st.session_state.messages[1]['content'].format(transcript_string)
+        
+        # LLM Chat
+        with st.expander('Summary of the Transcribed Audio File Generated by ChatGPT', expanded = True):
+            # display the AI generated summary.
+            with st.chat_message("assistant", avatar='https://upload.wikimedia.org/wikipedia/commons/0/04/ChatGPT_logo.svg'):
+                st.write(init)
+
+            # chat field
+            with st.form("Chat",clear_on_submit=True):
+                prompt = st.text_input("Chat with the Transcript (2 prompts limit)")
+                st.form_submit_button()
+            
+            # message list
+            # for message in st.session_state.messages[2:]:
+            #     with st.chat_message(message["role"]):
+            #         st.markdown(message["content"])
+
+            # make request if prompt was entered
+            if prompt:
+                st.session_state.prompt_request_counter += 1
+                if st.session_state.prompt_request_counter > PROMPT_REQUEST_LIMIT:
+                    st.warning('Exceeded prompt limit.'); 
+                    st.stop()
+                # append user prompt to messages
+                st.session_state.messages.append({"role": "user", "content": prompt})
+
+                # dislay user prompt
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+                
+                # stream LLM Assisstant response
+                with st.chat_message("assistant"):
+                    message_placeholder = st.empty()
+                    full_response = ""
+
+                    # stream response
+                    for response in openai.ChatCompletion.create(
+                        model=st.session_state["openai_model"],
+                        messages=[
+                            {"role": m["role"], "content": m["content"]}
+                            for m in st.session_state.messages
+                        ],
+                        stream=True,
+                    ):
+                        full_response += response.choices[0].delta.get("content", "")
+                        message_placeholder.markdown(full_response + "▌")
+                    message_placeholder.markdown(full_response)
+
+                # append ai response to messages
+                st.session_state.messages.append({"role": "assistant", "content": full_response})
+            
+    # Trancription Completed Section
+    with container_transcript_completed:
         st.info(f'Completed transcribing')
        
         @st.cache_data
         def convert_df(string):
             # IMPORTANT: Cache the conversion to prevent computation on every rerun
             return string.encode('utf-8')
-
+        # encode transcript string
         transcript_json_download = convert_df(json.dumps(transcript_json))
-
+        # transcript download buttons
         c1_b,c2_b = st.columns((1,2))
+
+        # json button
         with c1_b:
             ste.download_button(
                 "Download transcript as json",
@@ -312,10 +422,12 @@ if "audio" in locals():
                 transcript_path,
             )
 
+        # create csv string
         header = ','.join(transcript_json[0].keys()) + '\n'
         for s in transcript_json:
             header += ','.join([str(e) if ',' not in str(e) else '"' + str(e) + '"' for e in s.values()]) + '\n'
 
+        # csv button
         transcript_csv_download = convert_df(header)
         with c2_b:
             ste.download_button(

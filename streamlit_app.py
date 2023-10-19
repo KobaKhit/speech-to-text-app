@@ -109,20 +109,30 @@ if "messages" not in st.session_state:
     st.session_state.messages = initial_prompt 
     
 
-st.title("Speech to Chat")
+st.title("Speech-to-Chat")
 reddit_thread = 'https://www.reddit.com/r/dataisbeautiful/comments/17413bq/oc_speech_diarization_app_that_transcribes_audio'
 
 with st.sidebar:
     st.markdown('''
     # How to Use
 
-      1. Enter a youtube link or upload an audio file.
-      2. "Chat" with the file.
+      1. Enter a youtube link.
+      2. "Chat" with the video.
 
       Example prompts:
       - Which speaker spoke the most?
       - What are important keywords in the transcript for SEO?
     ''')
+
+    api_key_input = st.text_input(
+            "OpenAI API Key to lift request limits (Coming soon)",
+            disabled=True,
+            type="password",
+            placeholder="Paste your OpenAI API key here (sk-...)",
+            help="You can get your API key from https://platform.openai.com/account/api-keys.",  # noqa: E501
+            value=os.environ.get("OPENAI_API_KEY", None)
+            or st.session_state.get("OPENAI_API_KEY", ""),
+        )
 
     st.divider()
 
@@ -130,7 +140,7 @@ with st.sidebar:
         # About 
 
         Given an audio file or a youtube link this app will
-          - [x] 1. Parition the audio according to the identity of each speaker (diarization) using `pyannote` [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
+          - [x] 1. Partition the audio according to the identity of each speaker (diarization) using `pyannote` [HuggingFace Speaker Diarization api](https://huggingface.co/pyannote/speaker-diarization-3.0)
           - [x] 2. Transcribe each audio segment using [OpenAi Whisper API](https://platform.openai.com/docs/guides/speech-to-text/quickstart)
           - [x] 3. Set up an LLM chat with the transcript loaded into its knowledge database, so that a user can "talk" to the transcript of the audio file.
 

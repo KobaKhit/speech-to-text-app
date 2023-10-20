@@ -372,7 +372,12 @@ if "audio" in locals():
     with container_transcript_chat:
         # get a summary of transcript from ChatGpt
         st.session_state.messages[1]['content'] = st.session_state.messages[1]['content'].format(transcript_string)
-        init = get_initial_response(st.session_state.messages)
+        try:
+            init = get_initial_response(st.session_state.messages)
+        except openai.error.APIError:
+            # st.stop('It is not you. It is not this app. It is OpenAI API thats having issues.')
+            init = 'OpenAI API is having issues. Hope they resolve it soon. Refer to https://status.openai.com/'
+            st.warning(init)
         # pass transcript to initial prompt
         
         

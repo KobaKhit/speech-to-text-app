@@ -376,8 +376,8 @@ if "audio" in locals():
             init = get_initial_response(st.session_state.messages)
         except openai.error.APIError:
             # st.stop('It is not you. It is not this app. It is OpenAI API thats having issues.')
-            init = 'OpenAI API is having issues. Hope they resolve it soon. Refer to https://status.openai.com/'
-            st.warning(init)
+            init = ''
+            st.warning('OpenAI API is having issues. Hope they resolve it soon. Refer to https://status.openai.com/')
         # pass transcript to initial prompt
         
         

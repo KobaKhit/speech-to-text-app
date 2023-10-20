@@ -75,7 +75,8 @@ def process_youtube_link(youtube_link):
         audio_name = audio_stream.default_filename
         st.write(f"Downloaded {audio_name}")
     except pytube.exceptions.AgeRestrictedError:
-        st.stop('Age restricted videos cannot be processed.')
+        st.warning('Age restricted videos cannot be processed.')
+        st.stop()
 
     try:
         os.remove('sample.mp4')
@@ -157,7 +158,7 @@ with st.sidebar:
 container_transcript_chat = st.container()
 
 # Source Selection
-option = st.radio("Select source:", [ "Use YouTube link","Example"], index=0)
+option = st.radio("Select source:", [ "Use YouTube link","See Example"], index=0)
 
 # Upload audio file
 if option == "Upload an audio file":
@@ -204,7 +205,7 @@ elif option == "Use YouTube link":
         # audio = audio.set_frame_rate(sample_rate)
         # except Exception as e:
         #     st.write(f"Error: {str(e)}")
-elif option == 'Example':
+elif option == 'See Example':
     youtube_link = 'https://www.youtube.com/watch?v=TamrOZX9bu8'
     audio_name = 'Stephen A. Smith has JOKES with Shannon Sharpe'
     st.write(f'Loaded audio file from {youtube_link} - {audio_name} 👏😂')
@@ -361,19 +362,19 @@ if "audio" in locals():
     transcript_string = '\n'.join([f"{s['speaker']} start={s['start']:.1f}s end={s['end']:.1f}s : {s['transcript']}" for s in transcript_json])
     
     @st.cache_data
-    def get_initial_response(messages):
+    def get_initial_response(transcript_string):
+        st.session_state.messages[1]['content'] = st.session_state.messages[1]['content'].format(transcript_string)
         initial_response = openai.ChatCompletion.create(
                             model=st.session_state["openai_model"],
-                            messages=messages
+                            messages=st.session_state.messages
                         )
         return initial_response['choices'][0]['message']['content']
     
     # Chat container
     with container_transcript_chat:
         # get a summary of transcript from ChatGpt
-        st.session_state.messages[1]['content'] = st.session_state.messages[1]['content'].format(transcript_string)
         try:
-            init = get_initial_response(st.session_state.messages)
+            init = get_initial_response(transcript_string)
         except openai.error.APIError:
             # st.stop('It is not you. It is not this app. It is OpenAI API thats having issues.')
             init = ''

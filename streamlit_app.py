@@ -104,7 +104,7 @@ if "prompt_request_counter" not in st.session_state:
     st.session_state["prompt_request_counter"] = 0
 
 initial_prompt =  [{"role": "system", "content": "You are helping to analyze and summarize a transcript of a conversation."},
-                   {"role": 'user', "content": 'Please summarize briefly the following transcript\n{}'}]
+                   {"role": 'user', "content": 'Please summarize briefly below transcript. Also, inlcude a list of tags with a hash for SEO. \n{}'}]
 if "messages" not in st.session_state:
     st.session_state.messages = initial_prompt 
     
@@ -121,7 +121,7 @@ with st.sidebar:
 
       Example prompts:
       - Which speaker spoke the most?
-      - What are important keywords in the transcript for SEO?
+      - Give me a list of tags with a hash for SEO based on this transcript?
     ''')
 
     api_key_input = st.text_input(

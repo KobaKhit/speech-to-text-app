@@ -239,6 +239,7 @@ if "audio" in locals():
     pipeline = Pipeline.from_pretrained(
        "pyannote/speaker-diarization-3.0", use_auth_token=hf_api_key)
     if torch.cuda.device_count() > 0: # use gpu if available
+        st.write('Using cuda - GPU')
         pipeline.to(torch.device('cuda'))
 
     # run the pipeline on an audio file
@@ -371,6 +372,7 @@ if "audio" in locals():
         return initial_response['choices'][0]['message']['content']
     
     # Chat container
+    st.session_state.messages[1]['content'] = st.session_state.messages[1]['content'].format(transcript_string)
     with container_transcript_chat:
         # get a summary of transcript from ChatGpt
         try:

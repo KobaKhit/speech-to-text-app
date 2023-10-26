@@ -180,7 +180,7 @@ with st.sidebar:
 
       Example prompts:
       - Which speaker spoke the most?
-      - Give me a list of tags with a hash for SEO based on this transcript?
+      - Give me a list of tags with a hash for SEO based on this transcript.
     ''')
 
     api_key_input = st.text_input(

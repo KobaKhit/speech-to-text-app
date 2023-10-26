@@ -2,8 +2,9 @@ import streamlit as st
 import streamlit_ext as ste
 import openai
 from pydub import AudioSegment
-from pytube import YouTube
-import pytube
+# from pytube import YouTube
+# import pytube
+import yt_dlp
 import io
 from pyannote.audio import Pipeline
 from pyannote.audio.pipelines.utils.hook import ProgressHook
@@ -15,6 +16,9 @@ import torch
 import urllib.parse as urlparse
 from urllib.parse import urlencode
 import os
+
+import unicodedata
+import re
 
 import matplotlib
 matplotlib.use('Agg')
@@ -45,6 +49,22 @@ def add_query_parameter(link, params):
 
     return urlparse.urlunparse(url_parts)
 
+def slugify(value, allow_unicode=False):
+    """
+    Taken from https://github.com/django/django/blob/master/django/utils/text.py
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+    dashes to single dashes. Remove characters that aren't alphanumerics,
+    underscores, or hyphens. Convert to lowercase. Also strip leading and
+    trailing whitespace, dashes, and underscores.
+    """
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize('NFKC', value)
+    else:
+        value = unicodedata.normalize('NFKD', value).encode('ascii', 'ignore').decode('ascii')
+    value = re.sub(r'[^\w\s-]', '', value.lower())
+    return re.sub(r'[-\s]+', '-', value).strip('-_')
+
 def youtube_video_id(value):
     """
     Examples:
@@ -68,7 +88,11 @@ def youtube_video_id(value):
     return None
 
 @st.cache_data
-def process_youtube_link(youtube_link):
+def process_youtube_link2(youtube_link):
+    '''
+    uses pytube https://github.com/pytube/pytube
+    issue with https://github.com/pytube/pytube/issues/84
+    '''
     try:
         yt = YouTube(youtube_link)
         audio_stream = yt.streams.filter(only_audio=True).first()
@@ -88,6 +112,41 @@ def process_youtube_link(youtube_link):
     st.audio(create_audio_stream(audio), format="audio/mp4", start_time=0)
     return audio, audio_name
 
+
+@st.cache_data
+def process_youtube_link(youtube_link):
+    'uses yt-dlp https://github.com/yt-dlp/yt-dlp'
+
+    try:
+        os.remove('sample.m4a')
+    except OSError:
+        pass
+
+    ydl_opts = {
+        'format': 'm4a/bestaudio/best',
+        # ℹ️ See help(yt_dlp.postprocessor) for a list of available Postprocessors and their arguments
+        'outtmpl': './sample.%(ext)s'
+        # 'postprocessors': [{  # Extract audio using ffmpeg
+        #     'key': 'FFmpegExtractAudio',
+        #     'preferredcodec': 'm4a',
+        # }]
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(youtube_link, download=True)
+            audio_name = slugify( info['title'] )
+        st.write(f"Downloaded {info['title']}")
+    except Exception as e:
+        st.warning(e)
+        st.stop()
+
+   
+    time.sleep(2)
+    audio = load_audio(f'sample.m4a')
+    st.audio(create_audio_stream(audio), format="audio/m4a", start_time=0)
+    return audio, audio_name
+
 @st.cache_data
 def load_rttm_file(rttm_path):
     return load_rttm(rttm_path)['stream']
@@ -104,7 +163,7 @@ if "prompt_request_counter" not in st.session_state:
     st.session_state["prompt_request_counter"] = 0
 
 initial_prompt =  [{"role": "system", "content": "You are helping to analyze and summarize a transcript of a conversation."},
-                   {"role": 'user', "content": 'Please summarize briefly below transcript. Also, inlcude a list of tags with a hash for SEO. \n{}'}]
+                   {"role": 'user', "content": 'Please summarize briefly below transcript and inlcude a list of tags with a hash for SEO. \n{}'}]
 if "messages" not in st.session_state:
     st.session_state.messages = initial_prompt 
     
@@ -324,7 +383,7 @@ if "audio" in locals():
                 my_bar.progress((i+1)/len(sp_chunks_loaded), text=progress_text)
 
             transcript_json = sp_chunks_loaded
-            transcript_path = f'{audio_name.split(".mp4")[0]}-transcript.json'
+            transcript_path = f'{audio_name.split(".")[0]}-transcript.json'
 
         else:
             sp_chunks_updated = []
@@ -346,13 +405,14 @@ if "audio" in locals():
                         sp_chunks_updated.append({'speaker':s['speaker'], 
                                                 'start':s['start'], 'end':s['end'],
                                                 'duration': s['duration'],'transcript': transcript})
-
-                        progress_text = f"Processing {i+1}/{len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT])}..."
-                        my_bar.progress((i+1)/len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT]), text=progress_text)
                         st.markdown(transcript_summary)
 
+                progress_text = f"Processing {i+1}/{len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT])}..."
+                my_bar.progress((i+1)/len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT]), text=progress_text)
+                   
+
             transcript_json = [dict((k, d[k]) for k in ['speaker','start','end','duration','transcript'] if k in d) for d in sp_chunks_updated]
-            transcript_path = f'{audio_name.split(".mp4")[0]}-transcript.json'
+            transcript_path = f'{audio_name.split(".")[0]}-transcript.json'
             st.session_state.transcript_file = transcript_path
 
     # save the trancript file

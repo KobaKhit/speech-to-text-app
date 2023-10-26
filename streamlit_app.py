@@ -36,6 +36,7 @@ hf_api_key = st.secrets['hf']
 
 TRANSCRIPTION_REQUEST_LIMIT = 150
 PROMPT_REQUEST_LIMIT = 2
+DURATION_LIMIT = 360 # seconds
 
 def create_audio_stream(audio):
     return io.BytesIO(audio.export(format="wav").read())
@@ -142,7 +143,6 @@ def process_youtube_link(youtube_link):
         st.stop()
 
    
-    time.sleep(2)
     audio = load_audio(f'sample.m4a')
     st.audio(create_audio_stream(audio), format="audio/m4a", start_time=0)
     return audio, audio_name
@@ -157,7 +157,7 @@ def load_audio(uploaded_audio):
 
 
 if "openai_model" not in st.session_state:
-    st.session_state["openai_model"] = "gpt-3.5-turbo"
+    st.session_state["openai_model"] = "gpt-3.5-turbo-16k"
 
 if "prompt_request_counter" not in st.session_state:
     st.session_state["prompt_request_counter"] = 0
@@ -288,9 +288,9 @@ elif option == 'See Example':
 if "audio" in locals():
     # create stream
     duration = audio.duration_seconds
-    if duration > 360:
-        st.info('Only processing the first 6 minutes of the audio due to Streamlit.io resource limits.')
-        audio = audio[:360*1000]
+    if duration > DURATION_LIMIT:
+        st.info(f'Only processing the first {int(DURATION_LIMIT/6/6)} minutes of the audio due to Streamlit.io resource limits.')
+        audio = audio[:DURATION_LIMIT*1000]
         duration = audio.duration_seconds
     
     
@@ -362,7 +362,7 @@ if "audio" in locals():
 
     
     # Transcript containers
-    st.write('Transcribing using Whisper API (150 requests limit)...')
+    st.write(f'Transcribing using Whisper API ({TRANSCRIPTION_REQUEST_LIMIT} requests limit)...')
     container_transcript_completed = st.container()
 
     progress_text = f"Processing 1/{len(sp_chunks[:TRANSCRIPTION_REQUEST_LIMIT])}..."
@@ -452,7 +452,7 @@ if "audio" in locals():
 
             # chat field
             with st.form("Chat",clear_on_submit=True):
-                prompt = st.text_input('Chat with the Transcript (2 prompts limit)')
+                prompt = st.text_input(f'Chat with the Transcript ({int(PROMPT_REQUEST_LIMIT)} prompts limit)')
                 st.form_submit_button()
             
             # message list
